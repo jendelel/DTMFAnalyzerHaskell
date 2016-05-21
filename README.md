@@ -1,6 +1,19 @@
 # DTMFAnalyzerHaskell
 DTMF Analyzer in Haskell (School project)
 
+How to use it?
+--------------
+Either
+
+      ghci
+      Prelude>:l DTMFAnalyzer.hs
+      Prelude>analyzeFile "your_file.wav"
+
+Or
+
+      ghc --make DTMFAnalyzer.hs
+      DTMFAnalyzer.exe "your_file.wav"
+
 How it works?
 -------------
 1) The wave file is parsed into array of floats
