@@ -15,4 +15,4 @@ How it works?
 
 Credits:
 --------
-First of all, I would like to thanks to Martin Mares who helped me with the concept of FFT. Second, thank you, Miran Lipovica, for your great book http://learnyouahaskell.com/. Last but not least, my thanks goes to the creators of these wonderful websites: http://www.dialabc.com/ and https://twistedwave.com/online/.
+First of all, I would like to thanks to Martin Mares (http://mj.ucw.cz) who helped me with the concept of FFT. Second, thank you, Miran Lipovica, for your great book http://learnyouahaskell.com/. Last but not least, my thanks goes to the creators of these wonderful websites: http://www.dialabc.com/ and https://twistedwave.com/online/.
