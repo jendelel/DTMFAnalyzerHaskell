@@ -1,4 +1,6 @@
--- Zapoctak na Haskell
+-- DTMF Analyzer
+-- Haskell School Project (Faculty of Mathematics and Physics, Charles University in Prague)
+-- Author: Lukas Jendele
 import System.Environment
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Complex as C
@@ -55,9 +57,8 @@ fftBackward n lst = map (`div'` n) $ fft n ((C.conjugate (nthPrimitiveSquareRoot
 
 
 main = do 
-    (fileName:_) <- getArgs
-    wav <- parseFile fileName
-    return ()  
+    (filePath:_) <- getArgs
+    analyzeFile filePath
     
 --loads the WaveFile from a file given a path
 parseFile filePath = do
@@ -146,7 +147,7 @@ wavDuration :: WaveFile -> Float
 wavDuration wav = ((fromIntegral $ dataSize wav) * (fromIntegral $ channels wav) * 8) / ((fromIntegral $ sampleRate wav) * (fromIntegral $ bitDepth wav) )
 
 -- turns the list into a list of small intervals
-intervalLength = 15
+intervalLength = 100
 
 intervals_internal [] = []
 intervals_internal lst@(head:tail) = (take (intervalLength) lst) : (intervals_internal tail)
@@ -164,16 +165,19 @@ getInterval from to wav = let rate = ((fromIntegral $ sampleRate wav) :: Float)
                               toIndex = floor $ (rate * to)
                           in take (toIndex - fromIndex) (drop fromIndex $ fileData wav)
 
+-- helper function for getBeepIntervals
 getBeeps _ [] _ = []
 getBeeps i (interval:tailOfIntervals) globalAverage = (i, if globalAverage < intervalAverage then True else False, head interval):(getBeeps (i+1) tailOfIntervals globalAverage)                                                       
                                                    where intervalAverage = my_average interval
-
+-- handy function for debugging
 indexToTime index wav = (fromIntegral index) / (fromIntegral $ sampleRate wav)
 
 filterBeepValues [] = []
 filterBeepValues ((index, isQuiet, value):tail)     |   (not isQuiet)     = []
                                                     |   otherwise         = (index, value):(filterBeepValues tail)
-                                                   
+
+-- splits the wav file into into intervals and returns only non-quiet ones
+-- it takes little windows and if the abs average value of the window > abs average of the file, the window is regarded as non-quite 
 getBeepIntervals wav = let wavData = fileData wav
                            globalAverage = my_average wavData
                            listOfIntervals = intervals wavData
@@ -190,8 +194,11 @@ DTMF keypad frequencies (with sound clips)
 2/770 Hz 	 4 / 10  	 5 / 12   	 6 / 14  	 B / 16
 3/852 Hz 	 7 / 15 	 8 / 18   	 9 / 21 	 C / 24 
 4/941 Hz 	 * / 20 	 0 / 24 	 # / 28 	 D / 32
+
+Each frequency button and frequency has its index. If you multiply the indices of two DTMF frequencies, you get index of the button
 -}                
 
+-- constant - range around the precise DTMF freq
 freqLimit = 15 
 
 dtmfFrequencies = [697,770,852,941,1209,1336,1477,1633]
@@ -200,28 +207,22 @@ dtmfFrequencyRanges_internal :: [Int] -> [Set.Set Int]
 dtmfFrequencyRanges_internal [] = []
 dtmfFrequencyRanges_internal (freq:rest) = (Set.fromList [(freq - freqLimit)..(freq + freqLimit)]):(dtmfFrequencyRanges_internal rest)
 
+-- set for looking up if frequency is regarded as DTMF frequency or not
 dtmfFrequencyRanges :: [Set.Set Int]
 dtmfFrequencyRanges = dtmfFrequencyRanges_internal dtmfFrequencies
 
+-- dictionary to look up chars representing buttons, we look up by the index of the button
 dtmfTonesDict = Map.fromList $ zip ([x*y | x<- [1..4], y<-[5..8]]) ['1','2','3','A','4','5','6','B','7','8','9','C','*','0','#','D']
 
+-- returns 0 if no otherwise index of frequency from table above
 isDTMFFreq :: Int -> Int
 isDTMFFreq freq = snd $ foldl f (1,0) dtmfFrequencyRanges
                 where f acc@(index, result) set = if result /= 0 then acc 
                                                   else 
                                                     if freq `Set.member` set then (index+1, index) 
                                                     else (index+1, 0)
-                                                    
-debugStep = do
-          wav <-parseFile "nahravka.wav"
-          let beep = (getBeepIntervals wav) !! 28
-          return (analyzeInterval beep 8000)
-                                                    
-debugF = do
-        wav <- parseFile "nahravka.wav"
-        let beeps = (getBeepIntervals wav)
-        return(analyzeIntervals beeps (sampleRate wav))
-                                                    
+
+-- given FFT Output, it returns recognized DTMF frequencies
 analyzeFFTOutput :: Int -> Int -> [C.Complex Float] -> Int -> Float -> [(Int, Float)] 
 analyzeFFTOutput i n (x:xs) smplRate avrgValue   | i == n          = []
                                                  | i > (n `div` 2) = []
@@ -229,13 +230,15 @@ analyzeFFTOutput i n (x:xs) smplRate avrgValue   | i == n          = []
                                                                          dfmtFreq = isDTMFFreq $ floor freq
                                                                          currentVal = (C.realPart $ abs x)
                                                                      in if dfmtFreq == 0 then restOfRecurrsion
-                                                                        else if currentVal > (10 * avrgValue) then (dfmtFreq, currentVal):(restOfRecurrsion)
+                                                                        else if currentVal > avrgValue then (dfmtFreq, currentVal):(restOfRecurrsion)
                                                                              else restOfRecurrsion
                                                                      where restOfRecurrsion = analyzeFFTOutput (i+1) n xs smplRate avrgValue
+
 maybeCharToChar :: Maybe Char -> Char
 maybeCharToChar Nothing = '?'
 maybeCharToChar (Just c) = c
-                                                                     
+
+-- analyzes interval of function and returns which button it is dialing                                                                     
 analyzeInterval :: [(Int, Float)] -> Int -> Char
 analyzeInterval interval smplRate = let len = length interval
                                         floorPow2 = if len <= 1 then 0 else 2 ^ (floor $ logBase 2 (fromIntegral len)) -- calculate the n for FFT
@@ -248,6 +251,12 @@ analyzeInterval interval smplRate = let len = length interval
                                         tone = if (length frequencies) < 2 then 0 else (fst $ head frequencies) * (fst $ head (tail frequencies))
                                     in  maybeCharToChar $ Map.lookup tone dtmfTonesDict
 
+
 analyzeIntervals :: [[(Int, Float)]] -> Int -> String
 analyzeIntervals [] _ = []
 analyzeIntervals (interval:rest) smplRate = (analyzeInterval interval smplRate):(analyzeIntervals rest smplRate)
+
+analyzeFile filePath = do
+    wav <- parseFile filePath
+    let beeps = getBeepIntervals wav
+    putStrLn (analyzeIntervals beeps (sampleRate wav))
