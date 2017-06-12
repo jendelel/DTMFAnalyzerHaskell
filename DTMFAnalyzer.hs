@@ -13,7 +13,7 @@ import qualified Data.Map as Map
 import qualified Data.Function as DataFunction
 
 nthPrimitiveSquareRoot :: Int -> C.Complex Float
-nthPrimitiveSquareRoot n = C.conjugate $ C.mkPolar 1 (2*pi/(fromIntegral n))
+nthPrimitiveSquareRoot n = if (n==0) then 1 else C.conjugate $ C.mkPolar 1 (2*pi/(fromIntegral n))
 
 -- returns filters odd-indexed elements
 takeOdd :: [C.Complex a] -> [C.Complex a]
